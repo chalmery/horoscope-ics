@@ -137,9 +137,15 @@ def get_celestial_context(d: date) -> str:
     sun = get_sun_sign(d)
     moon = calc_moon_phase(d)
 
-    ctx = f"日期：{d.strftime('%Y年%m月%d日')}\n"
+    weekdays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+    wd = weekdays[d.weekday()]
+    is_weekend = d.weekday() >= 5
+    day_type = "周末休息日" if is_weekend else "工作日"
+
+    ctx = f"日期：{d.strftime('%Y年%m月%d日')} {wd}（{day_type}）\n"
     ctx += f"太阳位于：{sun['emoji']} {sun['name']}\n"
     ctx += f"月相：{moon['emoji']} {moon['name']}（月相周期第{moon['phase_day']}天，周期29.5天）\n"
+    ctx += f"场景提示：今天是{day_type}，请围绕{wd}的真实生活场景来写，不要写不符合{day_type}的场景。\n"
     return ctx
 
 
