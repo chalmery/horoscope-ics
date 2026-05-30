@@ -5,6 +5,7 @@ import os
 import json
 import math
 import hashlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -320,6 +321,36 @@ def get_fallback_data(sign: dict, idx: int) -> dict:
 # 主流程
 # ============================================================
 
+def process_sign(sign: dict, idx: int, today: date, api_key: str, use_oss: bool, oss_config: dict):
+    """处理单个星座：调 API → 生成 ICS → 上传（并发执行）"""
+    name = sign["name"]
+    prefix = f"{sign['emoji']} {name}"
+
+    try:
+        data = call_deepseek(sign, today, api_key)
+        stars = "★" * data["stars"] + "☆" * (5 - data["stars"])
+        print(f"  {prefix} {stars} {data['summary']}")
+        print(f"    💕{data['love']} 💼{data['career']} 💰{data['wealth']}")
+        print(f"    📝 {data['fortune'][:50]}...")
+    except Exception as e:
+        print(f"  {prefix} ⚠️ API 失败: {e}")
+        data = get_fallback_data(sign, idx)
+
+    ics_content = generate_ics(sign, today, data)
+    filename = f"{name}.ics"
+    filepath = OUTPUT_DIR / filename
+    filepath.write_text(ics_content, encoding="utf-8")
+    print(f"    📄 {filename} ({len(ics_content)} bytes)")
+
+    if use_oss:
+        try:
+            upload_to_oss(filepath, filename, oss_config)
+        except Exception as e:
+            print(f"    ⚠️ OSS 上传失败: {e}")
+
+    return name
+
+
 def main():
     today = date.today()
     print(f"🔮 生成今日运势 ICS — {today.strftime('%Y年%m月%d日')}")
@@ -332,7 +363,6 @@ def main():
         print("❌ 未设置 DEEPSEEK_API_KEY 环境变量")
         return 1
 
-    # OSS 配置（可选）
     oss_config = {
         "access_key_id": os.environ.get("OSS_ACCESS_KEY_ID", ""),
         "access_key_secret": os.environ.get("OSS_ACCESS_KEY_SECRET", ""),
@@ -343,38 +373,25 @@ def main():
 
     OUTPUT_DIR.mkdir(exist_ok=True)
 
-    for idx, sign in enumerate(SIGNS):
-        name = sign["name"]
-        print(f"\n{'─'*40}")
-        print(f"  {sign['emoji']} {name} ...", end=" ")
-
-        try:
-            data = call_deepseek(sign, today, api_key)
-            print(f"{'★'*data['stars']}{'☆'*(5-data['stars'])} {data['summary']}")
-            print(f"    💕{data['love']} 💼{data['career']} 💰{data['wealth']}")
-            print(f"    📝 {data['fortune'][:50]}...")
-        except Exception as e:
-            print(f"⚠️ API 失败，使用备用数据: {e}")
-            data = get_fallback_data(sign, idx)
-
-        # 生成 ICS
-        ics_content = generate_ics(sign, today, data)
-        filename = f"{name}.ics"
-        filepath = OUTPUT_DIR / filename
-        filepath.write_text(ics_content, encoding="utf-8")
-        print(f"    📄 {filename} ({len(ics_content)} bytes)")
-
-        # 上传 OSS
-        if use_oss:
+    # 12星座全部并发请求
+    print(f"\n🚀 同时生成 12 星座运势...\n{'-'*40}")
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        futures = {
+            pool.submit(process_sign, sign, idx, today, api_key, use_oss, oss_config): sign["name"]
+            for idx, sign in enumerate(SIGNS)
+        }
+        for f in as_completed(futures):
             try:
-                upload_to_oss(filepath, filename, oss_config)
+                f.result()
             except Exception as e:
-                print(f"    ⚠️ OSS 上传失败: {e}")
+                print(f"  ❌ {futures[f]} 失败: {e}")
 
     print(f"\n{'='*40}")
     print(f"✅ 完成！生成 {len(SIGNS)} 个 ICS 文件 → {OUTPUT_DIR}")
     if use_oss:
-        print(f"📤 已上传到 OSS: {oss_config['bucket_name']}.{oss_config['endpoint']}")
+        endpoint = oss_config["endpoint"]
+        bucket = oss_config["bucket_name"]
+        print(f"📤 已上传到 OSS: https://{bucket}.{endpoint}/")
     return 0
 
 
