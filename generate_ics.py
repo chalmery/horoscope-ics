@@ -190,7 +190,7 @@ def call_deepseek(sign: dict, d: date, api_key: str) -> dict:
     celestial = get_celestial_context(d)
 
     response = client.chat.completions.create(
-        model="deepseek-chat",
+        model="deepseek-v4-pro",
         messages=[
             {"role": "system", "content": "你是一位幽默专业的占星师，总是输出合法JSON。"},
             {"role": "user", "content": build_prompt(sign, d, celestial)},
