@@ -149,37 +149,51 @@ def get_celestial_context(d: date) -> str:
 
 def build_prompt(sign: dict, d: date, celestial: str) -> str:
     """构建生成运势的 prompt。"""
-    return f"""你是一位幽默风趣的占星师「星小运」，请为{sign['emoji']} **{sign['name']}** 生成今日运势。
+    return f"""你是一位擅长撰写「现代年轻人爱看的星座日报」的编辑。
+
+不要机械描述星座性格。
+不要重复刻板印象。
+
+你的任务是：
+根据当天星象与星座能量，
+推测用户在现实生活中最可能遇到的具体场景、情绪和事件。
+
+重点关注：
+* 工作中的变化
+* 社交中的互动
+* 感情中的微妙信号
+* 金钱与消费冲动
+* 偶遇与巧合
+* 当代互联网生活
+* 情绪波动与内心独白
+
+写作要求：
+1. 像朋友聊天，而不是占星师讲课
+2. 多写具体场景，少写抽象概念
+3. 不解释星座理论
+4. 不分析星座性格
+5. 让读者感觉“这件事可能真的发生”
+6. 允许轻微幽默和网络感
+7. 每篇120~200字
+8. 保持神秘感，不要下结论
+9. 避免使用“你是{sign['name']}所以……”这类表达
+10. 输出必须像朋友圈看到的今日运势
 
 ## 今日天象
 {celestial}
 
-## 星座信息
-- 星座：{sign['emoji']} {sign['name']}（{sign['range']}）
-- 元素：{sign['element']}象星座
-- 守护星：{sign['ruler']}
-
-## 输出要求
-1. **运势正文2-3句话**，用第二人称「你」，结合今日天象和星座特质，语气轻松幽默
-2. **一句名言**，带作者，贴合当日运势主题
-3. **一个搞怪彩蛋**，可爱有趣，可以是幸运物/幸运食物/今日禁忌等
-4. 整体风格：轻松但不敷衍，有趣但不低俗
-
-## JSON 输出格式
+## 输出 JSON 格式
 ```json
 {{
   "stars": 3,
   "summary": "一句话摘要，8字以内",
-  "love": "★★★☆☆",
-  "career": "★★★★☆",
-  "wealth": "★★★☆☆",
-  "fortune": "2-3句运势正文",
-  "quote": "名人名言，带作者和emoji",
-  "tip": "搞怪彩蛋，带emoji"
+  "trend": "【今日趋势】场景化描述，120~200字，像朋友聊天，讲可能发生的具体事件和情绪",
+  "quote": "今日一句，简短有力量，不要总是名人名言，可以是有感而发的话",
+  "tip": "幸运小物，有趣、生活化、略带巧合感的物品或事件"
 }}
 ```
 
-stars 取值 1-5，love/career/wealth 用 ★ 表示。请确保输出合法 JSON。"""
+stars 取值 1-5。请确保输出合法 JSON。"""
 
 
 def call_deepseek(sign: dict, d: date, api_key: str) -> dict:
@@ -203,7 +217,7 @@ def call_deepseek(sign: dict, d: date, api_key: str) -> dict:
     result = json.loads(raw)
 
     # 校验必要字段
-    required = ["stars", "summary", "love", "career", "wealth", "fortune", "quote", "tip"]
+    required = ["stars", "summary", "trend", "quote", "tip"]
     for key in required:
         if key not in result:
             raise ValueError(f"DeepSeek 返回缺少字段: {key}")
@@ -226,13 +240,15 @@ def generate_ics(sign: dict, d: date, data: dict) -> str:
     stars_line = "★" * data["stars"] + "☆" * (5 - data["stars"])
     summary = f"{sign['emoji']} {sign['name']} · {data['summary']}"
 
-    description = f"""{stars_line} 今日运势
+    description = f"""{stars_line}
 
-{data['fortune']}
+{data['trend']}
 
-📜 {data['quote']}
+📜 今日一句：
+{data['quote']}
 
-🎲 {data['tip']}
+🎲 幸运小物：
+{data['tip']}
 
 🔮 由 DeepSeek AI 生成 · 每日更新 ✨"""
 
@@ -294,24 +310,18 @@ def get_fallback_data(sign: dict, idx: int) -> dict:
     rng = random.Random(f"{date.today().toordinal()}-{idx}")
 
     stars = rng.randint(3, 5)
-    love_stars = rng.randint(2, 5)
-    career_stars = rng.randint(2, 5)
-    wealth_stars = rng.randint(2, 5)
 
-    fortunes = [
-        f"今天{sign['ruler']}的能量围绕着你，适合停下来感受生活的美好。别忙着赶路，风景在路边。",
-        f"{sign['element']}象星座的特质今天格外突出，相信自己的直觉，它比你想象的更靠谱。",
-        f"宇宙给你发了一条消息：放松点。今天的运势平稳，适合按自己的节奏来，不必迁就所有人。",
-        f"今天是个适合做自己的日子。{sign['emoji']}的能量场不错，遇到选择时，选那个让你开心的。",
+    trends = [
+        f"今天的能量有点特别。你可能会在下午三点左右收到一条消息，内容让你犹豫要不要立刻回复——先放一放，答案自己会浮现。",
+        f"某个反复出现的小问题今天终于让你决定动手解决。过程比想象中顺利，可能是因为你终于愿意面对它了。",
+        f"今天适合做一些「不太划算」的事。比如绕路去买一杯特定的咖啡，或者给很久没联系的人发一句「最近怎么样」。",
+        f"身边某个人的情绪今天会很明显，但未必是说出来的那部分。你察觉到了，也不用点破——有时候保持沉默是更好的温柔。",
     ]
 
     return {
         "stars": stars,
-        "summary": ["宜社交放松", "静心整理规划", "灵感值得记录", "按自己的节奏"][idx % 4],
-        "love": "★" * love_stars + "☆" * (5 - love_stars),
-        "career": "★" * career_stars + "☆" * (5 - career_stars),
-        "wealth": "★" * wealth_stars + "☆" * (5 - wealth_stars),
-        "fortune": fortunes[idx % len(fortunes)],
+        "summary": ["消息值得等", "动手就有转机", "绕路也有风景", "沉默也是回应"][idx % 4],
+        "trend": trends[idx % len(trends)],
         "quote": QUOTES[idx % len(QUOTES)],
         "tip": FUNNY_TIPS[idx % len(FUNNY_TIPS)],
     }
@@ -330,8 +340,7 @@ def process_sign(sign: dict, idx: int, today: date, api_key: str, use_oss: bool,
         data = call_deepseek(sign, today, api_key)
         stars = "★" * data["stars"] + "☆" * (5 - data["stars"])
         print(f"  {prefix} {stars} {data['summary']}")
-        print(f"    💕{data['love']} 💼{data['career']} 💰{data['wealth']}")
-        print(f"    📝 {data['fortune'][:50]}...")
+        print(f"    📝 {data['trend'][:60]}...")
     except Exception as e:
         print(f"  {prefix} ⚠️ API 失败: {e}")
         data = get_fallback_data(sign, idx)
