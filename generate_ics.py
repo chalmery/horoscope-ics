@@ -241,7 +241,7 @@ def generate_ics(sign: dict, d: date, data: dict) -> str:
     dt = d.strftime("%Y%m%d")
     dt_end = (d + timedelta(days=1)).strftime("%Y%m%d")
     now_utc = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    uid = f"horoscope-{sign['name']}-daily@deepseek"
+    uid = f"horoscope-{sign['name']}-{dt}@deepseek"
 
     stars_line = "★" * data["stars"] + "☆" * (5 - data["stars"])
     summary = f"{sign['emoji']} {sign['name']} · {data['summary']}"
@@ -367,7 +367,7 @@ def process_sign(sign: dict, idx: int, today: date, api_key: str, use_oss: bool,
 
 
 def main():
-    today = date.today()
+    today = datetime.now(timezone(timedelta(hours=8))).date()
     print(f"🔮 生成今日运势 ICS — {today.strftime('%Y年%m月%d日')}")
     print(f"☀️  太阳位于：{get_sun_sign(today)['emoji']} {get_sun_sign(today)['name']}")
     moon = calc_moon_phase(today)
